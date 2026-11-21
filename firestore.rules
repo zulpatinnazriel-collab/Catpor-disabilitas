@@ -1,0 +1,165 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Administrator verification helper
+    function isAdmin() {
+      return isSignedIn() && (
+        (request.auth.token.email == 'zulpatinnazriel@gmail.com' && request.auth.token.email_verified == true) ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    // Validation helper for UserProfile
+    function isValidUserProfile(data) {
+      return data.userId is string && data.userId == request.auth.uid &&
+             data.email is string && data.email.size() > 0 && data.email.size() <= 150 &&
+             data.displayName is string && data.displayName.size() > 0 && data.displayName.size() <= 100 &&
+             (!('workerId' in data) || data.workerId == null || (data.workerId is string && data.workerId.size() <= 50)) &&
+             data.role in ['ADMIN', 'WORKER'] &&
+             (!('department' in data) || data.department == null || (data.department is string && data.department.size() <= 100));
+    }
+
+    // Validation helper for Activity
+    function isValidActivity(data) {
+      return data.userId is string && data.userId.size() > 0 && data.userId.size() <= 128 &&
+             (data.userId == request.auth.uid || isAdmin()) &&
+             data.workerName is string && data.workerName.size() > 0 && data.workerName.size() <= 100 &&
+             (!('workerId' in data) || data.workerId == null || (data.workerId is string && data.workerId.size() <= 50)) &&
+             data.date is string && data.date.size() >= 8 && data.date.size() <= 20 &&
+             data.title is string && data.title.size() > 0 && data.title.size() <= 200 &&
+             data.category is string && data.category.size() > 0 && data.category.size() <= 50 &&
+             data.location is string && data.location.size() > 0 && data.location.size() <= 300 &&
+             (!('startTime' in data) || data.startTime == null || (data.startTime is string && data.startTime.size() <= 10)) &&
+             (!('endTime' in data) || data.endTime == null || (data.endTime is string && data.endTime.size() <= 10)) &&
+             data.status in ['PENDING', 'IN_PROGRESS', 'COMPLETED', 'ISSUE'] &&
+             (!('notes' in data) || data.notes == null || (data.notes is string && data.notes.size() <= 5000)) &&
+             (!('issues' in data) || data.issues == null || (data.issues is string && data.issues.size() <= 2000)) &&
+             (!('resolution' in data) || data.resolution == null || (data.resolution is string && data.resolution.size() <= 2000)) &&
+             (!('photoBase64' in data) || data.photoBase64 == null || (data.photoBase64 is string && data.photoBase64.size() <= 500000)) &&
+             (!('excelSource' in data) || data.excelSource == null || (data.excelSource is string && data.excelSource.size() <= 200));
+    }
+
+    // Validation helper for ExcelReport
+    function isValidExcelReport(data) {
+      return data.userId is string && data.userId.size() > 0 && data.userId.size() <= 128 &&
+             (data.userId == request.auth.uid || isAdmin()) &&
+             data.workerName is string && data.workerName.size() > 0 && data.workerName.size() <= 100 &&
+             data.fileName is string && data.fileName.size() > 0 && data.fileName.size() <= 255 &&
+             data.fileType in ['XLSX', 'CSV', 'XLS'] &&
+             data.reportDate is string && data.reportDate.size() >= 8 && data.reportDate.size() <= 20 &&
+             data.totalRows is int && data.totalRows >= 0 &&
+             data.status in ['UPLOADED', 'PROCESSED', 'VERIFIED'] &&
+             (!('notes' in data) || data.notes == null || (data.notes is string && data.notes.size() <= 3000)) &&
+             (!('fileSize' in data) || data.fileSize == null || data.fileSize is int) &&
+             (!('rawContentSummary' in data) || data.rawContentSummary == null || (data.rawContentSummary is string && data.rawContentSummary.size() <= 10000));
+    }
+
+    // Users Collection
+    match /users/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && (userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+
+      allow create: if isSignedIn() && isValidId(userId) && userId == request.auth.uid &&
+                       incoming().userId == request.auth.uid &&
+                       incoming().createdAt is timestamp &&
+                       incoming().createdAt <= request.time &&
+                       incoming().updatedAt is timestamp &&
+                       incoming().updatedAt <= request.time &&
+                       (incoming().role == 'WORKER' || (incoming().role == 'ADMIN' && isAdmin())) &&
+                       isValidUserProfile(incoming());
+
+      allow update: if isSignedIn() && isValidId(userId) &&
+                       (userId == request.auth.uid || isAdmin()) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().updatedAt is timestamp &&
+                       incoming().updatedAt <= request.time &&
+                       (incoming().role == existing().role || isAdmin()) &&
+                       isValidUserProfile(incoming()) &&
+                       incoming().diff(existing()).affectedKeys().hasOnly([
+                         'displayName', 'workerId', 'department', 'role', 'updatedAt'
+                       ]);
+
+      allow delete: if isAdmin() && isValidId(userId);
+    }
+
+    // Activities Collection (Multi-user with Admin supervisor access)
+    match /activities/{activityId} {
+      allow get: if isSignedIn() && isValidId(activityId) && (existing().userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+
+      allow create: if isSignedIn() && isValidId(activityId) &&
+                       (incoming().userId == request.auth.uid || isAdmin()) &&
+                       incoming().createdAt is timestamp &&
+                       incoming().createdAt <= request.time &&
+                       incoming().updatedAt is timestamp &&
+                       incoming().updatedAt <= request.time &&
+                       isValidActivity(incoming());
+
+      allow update: if isSignedIn() && isValidId(activityId) &&
+                       (existing().userId == request.auth.uid || isAdmin()) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().updatedAt is timestamp &&
+                       incoming().updatedAt <= request.time &&
+                       isValidActivity(incoming()) &&
+                       incoming().diff(existing()).affectedKeys().hasOnly([
+                         'workerName', 'workerId', 'date', 'title', 'category', 'location',
+                         'startTime', 'endTime', 'status', 'notes', 'issues', 'resolution',
+                         'photoBase64', 'excelSource', 'updatedAt'
+                       ]);
+
+      allow delete: if isSignedIn() && isValidId(activityId) && (existing().userId == request.auth.uid || isAdmin());
+    }
+
+    // Excel Reports Collection (Multi-user with Admin supervisor access)
+    match /excel_reports/{reportId} {
+      allow get: if isSignedIn() && isValidId(reportId) && (existing().userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+
+      allow create: if isSignedIn() && isValidId(reportId) &&
+                       (incoming().userId == request.auth.uid || isAdmin()) &&
+                       incoming().createdAt is timestamp &&
+                       incoming().createdAt <= request.time &&
+                       incoming().updatedAt is timestamp &&
+                       incoming().updatedAt <= request.time &&
+                       isValidExcelReport(incoming());
+
+      allow update: if isSignedIn() && isValidId(reportId) &&
+                       (existing().userId == request.auth.uid || isAdmin()) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().updatedAt is timestamp &&
+                       incoming().updatedAt <= request.time &&
+                       isValidExcelReport(incoming()) &&
+                       incoming().diff(existing()).affectedKeys().hasOnly([
+                         'workerName', 'fileName', 'fileType', 'reportDate', 'totalRows',
+                         'status', 'notes', 'fileSize', 'rawContentSummary', 'updatedAt'
+                       ]);
+
+      allow delete: if isSignedIn() && isValidId(reportId) && (existing().userId == request.auth.uid || isAdmin());
+    }
+  }
+}

@@ -1,0 +1,198 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Profil pengguna karyawan lapangan atau administrator",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "ID pengguna Google/Firebase"
+        },
+        "email": {
+          "type": "string",
+          "description": "Alamat email pengguna"
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Nama tampilan pengguna"
+        },
+        "workerId": {
+          "type": "string",
+          "description": "Nomor Induk Pegawai atau ID Lapangan"
+        },
+        "role": {
+          "type": "string",
+          "description": "Peran pengguna (ADMIN atau WORKER)"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Waktu pendaftaran profil"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Waktu pembaruan profil"
+        }
+      },
+      "required": ["userId", "email", "displayName", "role", "createdAt", "updatedAt"]
+    },
+    "Activity": {
+      "title": "Activity",
+      "description": "Catatan kegiatan harian karyawan di lapangan",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "ID pengguna Google/Firebase karyawan lapangan"
+        },
+        "workerName": {
+          "type": "string",
+          "description": "Nama lengkap karyawan lapangan"
+        },
+        "workerId": {
+          "type": "string",
+          "description": "Nomor Induk Pegawai atau ID Karyawan"
+        },
+        "date": {
+          "type": "string",
+          "description": "Tanggal kegiatan berformat YYYY-MM-DD"
+        },
+        "title": {
+          "type": "string",
+          "description": "Judul atau ringkasan tugas kegiatan"
+        },
+        "category": {
+          "type": "string",
+          "description": "Kategori kegiatan (Survey, Instalasi, Maintenance, Kunjungan, Inspeksi, Pengiriman, Lainnya)"
+        },
+        "location": {
+          "type": "string",
+          "description": "Lokasi atau wilayah pelaksanaan kegiatan lapangan"
+        },
+        "startTime": {
+          "type": "string",
+          "description": "Waktu mulai kegiatan (HH:MM)"
+        },
+        "endTime": {
+          "type": "string",
+          "description": "Waktu selesai kegiatan (HH:MM)"
+        },
+        "status": {
+          "type": "string",
+          "description": "Status kegiatan (PENDING, IN_PROGRESS, COMPLETED, ISSUE)"
+        },
+        "notes": {
+          "type": "string",
+          "description": "Catatan detail hasil pelaksanaan kegiatan"
+        },
+        "issues": {
+          "type": "string",
+          "description": "Kendala lapangan yang dihadapi jika ada"
+        },
+        "resolution": {
+          "type": "string",
+          "description": "Tindak lanjut atau solusi atas kendala"
+        },
+        "photoBase64": {
+          "type": "string",
+          "description": "Lampiran dokumentasi foto lapangan terkompresi"
+        },
+        "excelSource": {
+          "type": "string",
+          "description": "Nama file Excel sumber jika diimpor dari file Excel"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp pencatatan kegiatan"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp pembaharuan kegiatan"
+        }
+      },
+      "required": ["userId", "workerName", "date", "title", "category", "location", "status", "createdAt", "updatedAt"]
+    },
+    "ExcelReport": {
+      "title": "ExcelReport",
+      "description": "Berkas laporan utama Excel yang diunggah oleh karyawan",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "ID pengguna pengunggah laporan"
+        },
+        "workerName": {
+          "type": "string",
+          "description": "Nama karyawan pelapor"
+        },
+        "fileName": {
+          "type": "string",
+          "description": "Nama file dokumen Excel"
+        },
+        "fileType": {
+          "type": "string",
+          "description": "Ekstensi file (XLSX atau CSV)"
+        },
+        "reportDate": {
+          "type": "string",
+          "description": "Tanggal periode laporan YYYY-MM-DD"
+        },
+        "totalRows": {
+          "type": "integer",
+          "description": "Total baris data dalam sheet Excel"
+        },
+        "status": {
+          "type": "string",
+          "description": "Status proses laporan (UPLOADED, PROCESSED, VERIFIED)"
+        },
+        "notes": {
+          "type": "string",
+          "description": "Keterangan atau ringkasan isi laporan"
+        },
+        "fileSize": {
+          "type": "integer",
+          "description": "Ukuran file dalam bytes"
+        },
+        "rawContentSummary": {
+          "type": "string",
+          "description": "Pratinjau struktur kolom dan data sampel Excel"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Waktu upload laporan"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Waktu pembaruan status laporan"
+        }
+      },
+      "required": ["userId", "workerName", "fileName", "fileType", "reportDate", "totalRows", "status", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": {
+        "$ref": "#/entities/UserProfile"
+      },
+      "description": "Koleksi profil pengguna karyawan dan administrator"
+    },
+    "/activities/{activityId}": {
+      "schema": {
+        "$ref": "#/entities/Activity"
+      },
+      "description": "Koleksi kegiatan harian lapangan per dokumen dengan akses multi-user dan kontrol admin"
+    },
+    "/excel_reports/{reportId}": {
+      "schema": {
+        "$ref": "#/entities/ExcelReport"
+      },
+      "description": "Koleksi berkas laporan utama Excel yang diupload oleh karyawan lapangan"
+    }
+  }
+}
